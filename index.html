@@ -1,0 +1,635 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>アルティメット食糞阻止！</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #4e342e;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+    user-select: none;
+    color: #fff;
+  }
+  #ui {
+    width: 90%;
+    max-width: 480px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 15px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    margin-bottom: 6px;
+  }
+  canvas {
+    background-color: #aed581;
+    border: 4px solid #33691e;
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+    width: 90vw;
+    height: 90vw;
+    max-width: 440px;
+    max-height: 440px;
+    touch-action: none;
+  }
+  #controls {
+    width: 90%;
+    max-width: 480px;
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    gap: 10px;
+  }
+  .action-btn {
+    flex: 1;
+    background-color: #ff9800;
+    color: white;
+    border: none;
+    padding: 10px;
+    font-size: 13px;
+    font-weight: bold;
+    border-radius: 8px;
+    box-shadow: 0 4px 0 #e65100;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+  .action-btn:active {
+    transform: translateY(4px);
+    box-shadow: none;
+  }
+  .action-btn:disabled {
+    background-color: #9e9e9e;
+    box-shadow: 0 4px 0 #616161;
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  #overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.92);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+    z-index: 999;
+  }
+  .mode-btn {
+    background-color: #4caf50;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 10px;
+    box-shadow: 0 4px 0 #2e7d32;
+    cursor: pointer;
+    margin: 6px 0;
+    width: 80%;
+    max-width: 250px;
+    touch-action: manipulation;
+  }
+  .mode-btn:active {
+    transform: translateY(4px);
+    box-shadow: none;
+  }
+  .ranking-box {
+    background: rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 8px;
+    margin: 8px 0;
+    width: 85%;
+    max-width: 300px;
+    font-size: 12px;
+    text-align: left;
+  }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div id="uiTimer">⏱️残り: <span id="timer">60</span>秒</div>
+  <div>💩回収: <span id="score">0</span></div>
+  <div>❤️命: <span id="life">❤️❤️❤️</span></div>
+</div>
+
+<canvas id="gameCanvas" width="440" height="440"></canvas>
+
+<div id="controls">
+  <button class="action-btn" id="snackBtn">🎾 おやつ(3)</button>
+  <button class="action-btn" id="sprayBtn">🧴 スプレー(2)</button>
+</div>
+
+<!-- スタート＆ゲームオーバー画面 -->
+<div id="overlay">
+  <div style="max-width: 400px; width: 100%; display: flex; flex-direction: column; align-items: center;">
+    <h2 id="modalTitle">🐶 アルティメット食糞阻止 💩</h2>
+    <p id="modalDesc" style="font-size: 12px; line-height: 1.5; margin-bottom: 15px;">
+      🌟ゴールデンうんち：2点GET！<br>
+      🍫かりんとう：犬が食べても減点なし！ただしプレイヤーが取るとマイナス！<br>
+      モードを選んでスタート！
+    </p>
+    <div id="menuArea" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+      <button class="mode-btn" id="btnNormal">🟢 ノーマル (60秒)</button>
+      <button class="mode-btn" id="btnHard" style="background-color: #ff9800; box-shadow: 0 4px 0 #e65100;">🟠 ハード (高速&45秒)</button>
+      <button class="mode-btn" id="btnEndless" style="background-color: #e91e63; box-shadow: 0 4px 0 #ad1457;">🔴 エンドレス (命3つ)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+const timerEl = document.getElementById('timer');
+const uiTimer = document.getElementById('uiTimer');
+const lifeEl = document.getElementById('life');
+const overlay = document.getElementById('overlay');
+const modalTitle = document.getElementById('modalTitle');
+const modalDesc = document.getElementById('modalDesc');
+const menuArea = document.getElementById('menuArea');
+const sprayBtn = document.getElementById('sprayBtn');
+const snackBtn = document.getElementById('snackBtn');
+
+const GRID_SIZE = 6;
+const CELL_SIZE = canvas.width / GRID_SIZE;
+
+let score = 0;
+let life = 3;
+let timeLeft = 60;
+let gameMode = 'normal';
+let gameRunning = false;
+let sprayCount = 2;
+let snackCount = 3;
+let pets = [];
+let poops = [];
+let snacks = [];
+let effects = [];
+let frameCount = 0;
+let timerInterval = null;
+
+const PET_TYPES = {
+  medium: { emoji: '🐕', size: 38, speed: 0.04, poopSize: 26, poopHp: 1, isRabbit: false },
+  small:  { emoji: '🐩', size: 30, speed: 0.07, poopSize: 18, poopHp: 1, isRabbit: false },
+  large:  { emoji: '🦮', size: 46, speed: 0.025, poopSize: 36, poopHp: 2, isRabbit: false },
+  rabbit: { emoji: '🐇', size: 32, speed: 0.055, poopSize: 0,  poopHp: 0, isRabbit: true }
+};
+
+function spawnPet(typeKey) {
+  const gx = Math.floor(Math.random() * GRID_SIZE);
+  const gy = Math.floor(Math.random() * GRID_SIZE);
+  pets.push({
+    type: typeKey,
+    spec: PET_TYPES[typeKey],
+    gx: gx, gy: gy,
+    targetGx: gx, targetGy: gy,
+    dirX: 1, state: 'idle',
+    timer: 30, targetPoop: null
+  });
+}
+
+function useSpray() {
+  if (!gameRunning || sprayCount <= 0) return;
+  sprayCount--;
+  sprayBtn.textContent = `🧴 スプレー(${sprayCount})`;
+  if (sprayCount <= 0) sprayBtn.disabled = true;
+  poops = [];
+  addEffect(2.5, 2.5, '✨ 消臭スプレー発動！！', '#00e5ff');
+}
+
+function useSnack() {
+  if (!gameRunning || snackCount <= 0) return;
+  snackCount--;
+  snackBtn.textContent = `🎾 おやつ(${snackCount})`;
+  if (snackCount <= 0) snackBtn.disabled = true;
+  const gx = Math.floor(Math.random() * GRID_SIZE);
+  const gy = Math.floor(Math.random() * GRID_SIZE);
+  snacks.push({ gx, gy, timer: 150 });
+  addEffect(gx, gy, '🎾 おやつ設置！', '#ffeb3b');
+}
+
+sprayBtn.addEventListener('click', useSpray);
+snackBtn.addEventListener('click', useSnack);
+
+function updateUI() {
+  scoreEl.textContent = score;
+  timerEl.textContent = timeLeft;
+  lifeEl.textContent = '❤️'.repeat(Math.max(0, life));
+}
+
+function addEffect(gx, gy, text, color) {
+  effects.push({
+    x: (gx + 0.5) * CELL_SIZE,
+    y: (gy + 0.3) * CELL_SIZE,
+    text, color, alpha: 1.0
+  });
+}
+
+function getAdjacentEmptyCell(gx, gy) {
+  const dirs = [{ dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 }];
+  dirs.sort(() => Math.random() - 0.5);
+  for (let d of dirs) {
+    const nx = Math.round(gx) + d.dx;
+    const ny = Math.round(gy) + d.dy;
+    if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE) {
+      if (!poops.some(p => p.gx === nx && p.gy === ny)) return { gx: nx, gy: ny };
+    }
+  }
+  return null;
+}
+
+function update() {
+  if (!gameRunning) return;
+  frameCount++;
+
+  for (let i = snacks.length - 1; i >= 0; i--) {
+    snacks[i].timer--;
+    if (snacks[i].timer <= 0) snacks.splice(i, 1);
+  }
+
+  pets.forEach(pet => {
+    let speedMultiplier = 1 + (score * 0.04);
+    if (gameMode === 'hard') speedMultiplier *= 1.4;
+    
+    if (pet.state === 'idle') {
+      pet.timer--;
+      if (pet.timer <= 0) {
+        if (snacks.length > 0 && Math.random() < 0.8) {
+          const snack = snacks[0];
+          const dx = Math.sign(snack.gx - Math.round(pet.gx));
+          const dy = dx === 0 ? Math.sign(snack.gy - Math.round(pet.gy)) : 0;
+          pet.targetGx = Math.round(pet.gx) + dx;
+          pet.targetGy = Math.round(pet.gy) + dy;
+          pet.state = 'move';
+        } else if (poops.length > 0 && Math.random() < 0.7) {
+          const target = poops[Math.floor(Math.random() * poops.length)];
+          pet.targetPoop = target;
+          const dx = Math.sign(target.gx - Math.round(pet.gx));
+          const dy = dx === 0 ? Math.sign(target.gy - Math.round(pet.gy)) : 0;
+          if (dx === 0 && dy === 0) {
+            pet.state = 'eating';
+            pet.timer = pet.spec.isRabbit ? 25 : 45;
+            return;
+          }
+          pet.targetGx = Math.round(pet.gx) + dx;
+          pet.targetGy = Math.round(pet.gy) + dy;
+          if (dx !== 0) pet.dirX = dx;
+          pet.state = 'move';
+        } else if (!pet.spec.isRabbit && Math.random() < 0.3 && poops.length < 8) {
+          pet.state = 'pooping';
+          pet.timer = 45;
+        } else {
+          const dirs = [{dx:1,dy:0},{dx:-1,dy:0},{dx:0,dy:1},{dx:0,dy:-1}];
+          const d = dirs[Math.floor(Math.random() * dirs.length)];
+          pet.targetGx = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(pet.gx) + d.dx));
+          pet.targetGy = Math.max(0, Math.min(GRID_SIZE - 1, Math.round(pet.gy) + d.dy));
+          if (d.dx !== 0) pet.dirX = d.dx;
+          pet.state = 'move';
+        }
+      }
+    } else if (pet.state === 'move') {
+      const curSpeed = pet.spec.speed * speedMultiplier;
+      const dx = pet.targetGx - pet.gx;
+      const dy = pet.targetGy - pet.gy;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= curSpeed) {
+        pet.gx = pet.targetGx;
+        pet.gy = pet.targetGy;
+        const snackIdx = snacks.findIndex(s => s.gx === Math.round(pet.gx) && s.gy === Math.round(pet.gy));
+        if (snackIdx > -1) {
+          snacks.splice(snackIdx, 1);
+          addEffect(pet.gx, pet.gy, '✨うまうま♪', '#ffeb3b');
+          pet.state = 'idle';
+          pet.timer = 40;
+          return;
+        }
+        const poopHere = poops.find(p => p.gx === pet.gx && p.gy === pet.gy);
+        if (poopHere) {
+          pet.targetPoop = poopHere;
+          pet.state = 'eating';
+          pet.timer = pet.spec.isRabbit ? 25 : 45;
+        } else {
+          pet.state = 'idle';
+          pet.timer = 10 + Math.random() * 15;
+        }
+      } else {
+        pet.gx += (dx / dist) * curSpeed;
+        pet.gy += (dy / dist) * curSpeed;
+      }
+    } else if (pet.state === 'pooping') {
+      pet.timer--;
+      if (pet.timer <= 0) {
+        const cell = getAdjacentEmptyCell(pet.gx, pet.gy);
+        if (cell) {
+          const rand = Math.random();
+          let itemType = 'normal';
+          if (rand < 0.08) itemType = 'golden';
+          else if (rand < 0.23) itemType = 'karinto';
+
+          poops.push({
+            gx: cell.gx, gy: cell.gy,
+            size: pet.spec.poopSize,
+            hp: 1, maxHp: 1,
+            itemType: itemType
+          });
+
+          if (itemType === 'golden') {
+            addEffect(cell.gx, cell.gy, '🌟ゴールデンうんち！', '#ffeb3b');
+          } else if (itemType === 'karinto') {
+            addEffect(cell.gx, cell.gy, '🍫かりんとう出現！', '#a1887f');
+          } else {
+            addEffect(cell.gx, cell.gy, '💨 ポトン！', '#fff');
+          }
+        }
+        pet.state = 'idle';
+        pet.timer = 25;
+      }
+    } else if (pet.state === 'eating') {
+      pet.timer--;
+      if (!poops.includes(pet.targetPoop)) {
+        pet.state = 'idle';
+        pet.timer = 10;
+        return;
+      }
+      if (pet.timer <= 0) {
+        const idx = poops.indexOf(pet.targetPoop);
+        if (idx > -1) {
+          const eatenItem = poops[idx];
+          poops.splice(idx, 1);
+          
+          if (eatenItem.itemType === 'karinto') {
+            // かりんとうを犬が食べた場合は減点なし！
+            addEffect(pet.gx, pet.gy, 'もぐもぐ(かりんとうセーフ)', '#69f0ae');
+          } else if (pet.spec.isRabbit) {
+            score += (eatenItem.itemType === 'golden' ? 2 : 1);
+            updateUI();
+            checkProgression();
+            addEffect(pet.gx, pet.gy, 'モグモグ(+点)', '#69f0ae');
+          } else {
+            // 通常のうんちを犬が食べた場合は命が減る
+            life--;
+            updateUI();
+            addEffect(pet.gx, pet.gy, '食べちゃった！💔', '#ff1744');
+            if (life <= 0) endGame();
+          }
+        }
+        pet.state = 'idle';
+        pet.timer = 20;
+      }
+    }
+  });
+
+  for (let i = effects.length - 1; i >= 0; i--) {
+    effects[i].y -= 0.8;
+    effects[i].alpha -= 0.02;
+    if (effects[i].alpha <= 0) effects.splice(i, 1);
+  }
+}
+
+function checkProgression() {
+  if (score === 4 && pets.length === 1) spawnPet('small');
+  else if (score === 8 && pets.length === 2) spawnPet('large');
+  else if (score === 12 && pets.length === 3) spawnPet('rabbit');
+  else if (score > 12 && score % 6 === 0 && pets.length < 6) {
+    const types = ['small', 'medium', 'large', 'rabbit'];
+    spawnPet(types[Math.floor(Math.random() * types.length)]);
+  }
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (let r = 0; r < GRID_SIZE; r++) {
+    for (let c = 0; c < GRID_SIZE; c++) {
+      ctx.fillStyle = (r + c) % 2 === 0 ? '#aed581' : '#9ccc65';
+      ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+      ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+      ctx.strokeRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+    }
+  }
+
+  snacks.forEach(s => {
+    ctx.font = '28px Arial';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🎾', (s.gx + 0.5) * CELL_SIZE, (s.gy + 0.5) * CELL_SIZE);
+  });
+
+  poops.forEach(p => {
+    const cx = (p.gx + 0.5) * CELL_SIZE;
+    const cy = (p.gy + 0.55) * CELL_SIZE;
+    ctx.font = `${p.size}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    if (p.itemType === 'golden') {
+      ctx.save();
+      ctx.fillStyle = '#ffd700';
+      ctx.font = `${p.size + 4}px Arial`;
+      ctx.fillText('💩', cx, cy);
+      ctx.font = 'bold 12px sans-serif';
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 3;
+      ctx.strokeText('✨金', cx, cy - p.size * 0.5);
+      ctx.fillStyle = '#ffeb3b';
+      ctx.fillText('✨金', cx, cy - p.size * 0.5);
+      ctx.restore();
+    } else if (p.itemType === 'karinto') {
+      ctx.fillText('🍫', cx, cy);
+    } else {
+      ctx.fillText('💩', cx, cy);
+    }
+  });
+
+  pets.forEach(pet => {
+    let cx = (pet.gx + 0.5) * CELL_SIZE;
+    let cy = (pet.gy + 0.5) * CELL_SIZE;
+    let scaleY = 1;
+
+    if (pet.state === 'move') {
+      if (pet.spec.isRabbit) cy -= Math.abs(Math.sin(frameCount * 0.3)) * 10;
+    } else if (pet.state === 'pooping') {
+      cx += (Math.random() - 0.5) * 6;
+      scaleY = 0.85;
+      cy += 4;
+    }
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(-pet.dirX, scaleY);
+    ctx.font = `${pet.spec.size}px Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(pet.spec.emoji, 0, 0);
+    ctx.restore();
+
+    if (pet.state === 'pooping') {
+      ctx.font = 'bold 12px sans-serif';
+      ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#d84315';
+      ctx.lineWidth = 3;
+      ctx.strokeText('ふんっ…', cx, cy - pet.spec.size * 0.6);
+      ctx.fillText('ふんっ…', cx, cy - pet.spec.size * 0.6);
+    }
+  });
+
+  effects.forEach(e => {
+    ctx.save();
+    ctx.globalAlpha = e.alpha;
+    ctx.font = 'bold 15px sans-serif';
+    ctx.fillStyle = e.color;
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 3;
+    ctx.strokeText(e.text, e.x, e.y);
+    ctx.fillText(e.text, e.x, e.y);
+    ctx.restore();
+  });
+}
+
+function gameLoop() {
+  if (!gameRunning) return;
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
+}
+
+function saveRanking(newScore) {
+  let key = 'poop_ranking_' + gameMode;
+  let ranking = JSON.parse(localStorage.getItem(key) || '[]');
+  ranking.push(newScore);
+  ranking.sort((a, b) => b - a);
+  ranking = ranking.slice(0, 5);
+  localStorage.setItem(key, JSON.stringify(ranking));
+  return ranking;
+}
+
+function endGame() {
+  gameRunning = false;
+  clearInterval(timerInterval);
+  
+  const ranking = saveRanking(score);
+  let modeName = gameMode === 'normal' ? 'ノーマル' : (gameMode === 'hard' ? 'ハード' : 'エンドレス');
+  let rankHtml = `<div class="ranking-box"><b>🏆 ${modeName} ランキング</b><br>`;
+  ranking.forEach((s, idx) => {
+    rankHtml += `${idx + 1}位: ${s} 点<br>`;
+  });
+  rankHtml += '</div>';
+
+  modalTitle.textContent = (gameMode !== 'endless' && timeLeft <= 0) ? '⏰ タイムアップ！' : '💥 ゲームオーバー！';
+  modalDesc.innerHTML = `最終スコア: <b>${score}</b> 点！<br>${rankHtml}`;
+  
+  menuArea.innerHTML = `
+    <button class="mode-btn" style="background-color: #ff9800; box-shadow: 0 4px 0 #e65100;" onclick="location.reload()">タイトルに戻る</button>
+  `;
+  overlay.style.display = 'flex';
+}
+
+function startGame(mode) {
+  gameMode = mode;
+  score = 0;
+  life = 3;
+  sprayCount = 2;
+  snackCount = 3;
+  sprayBtn.textContent = '🧴 スプレー(2)';
+  sprayBtn.disabled = false;
+  snackBtn.textContent = '🎾 おやつ(3)';
+  snackBtn.disabled = false;
+  
+  pets = [];
+  poops = [];
+  snacks = [];
+  effects = [];
+
+  if (gameMode === 'normal') {
+    timeLeft = 60;
+    uiTimer.style.display = 'block';
+  } else if (gameMode === 'hard') {
+    timeLeft = 45;
+    uiTimer.style.display = 'block';
+  } else {
+    timeLeft = 0;
+    uiTimer.style.display = 'none';
+  }
+
+  spawnPet('medium');
+  updateUI();
+  
+  overlay.style.display = 'none';
+  gameRunning = true;
+  gameLoop();
+
+  if (timerInterval) clearInterval(timerInterval);
+  if (gameMode !== 'endless') {
+    timerInterval = setInterval(() => {
+      timeLeft--;
+      updateUI();
+      if (timeLeft <= 0) {
+        endGame();
+      }
+    }, 1000);
+  }
+}
+
+document.getElementById('btnNormal').addEventListener('click', () => startGame('normal'));
+document.getElementById('btnHard').addEventListener('click', () => startGame('hard'));
+document.getElementById('btnEndless').addEventListener('click', () => startGame('endless'));
+
+function handleInput(e) {
+  if (!gameRunning) return;
+  const rect = canvas.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+  const x = (clientX - rect.left) * (canvas.width / rect.width);
+  const y = (clientY - rect.top) * (canvas.height / rect.height);
+
+  const clickedGx = Math.floor(x / CELL_SIZE);
+  const clickedGy = Math.floor(y / CELL_SIZE);
+
+  const poopIdx = poops.findIndex(p => p.gx === clickedGx && p.gy === clickedGy);
+  if (poopIdx > -1) {
+    const p = poops[poopIdx];
+    poops.splice(poopIdx, 1);
+
+    if (p.itemType === 'karinto') {
+      life--;
+      updateUI();
+      addEffect(clickedGx, clickedGy, 'うわっ、かりんとうだ！💔(-1)', '#ff1744');
+      if (life <= 0) endGame();
+    } else if (p.itemType === 'golden') {
+      score += 2;
+      updateUI();
+      checkProgression();
+      addEffect(p.gx, p.gy, '+2 🌟ゴールデン！', '#ffeb3b');
+    } else {
+      score += 1;
+      updateUI();
+      checkProgression();
+      addEffect(p.gx, p.gy, '+1 回収！', '#ffeb3b');
+    }
+  }
+}
+
+canvas.addEventListener('mousedown', handleInput);
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  handleInput(e);
+}, { passive: false });
+
+draw();
+</script>
+</body>
+</html>
